@@ -76,7 +76,7 @@ services:
       THUMBNAILS_WEBDAVSOURCE_BASEURL: http://localhost:9200/remote.php/webdav/
     volumes:
       - ./config:/config
-      - ocis-data:/var/tmp/ocis
+      - ocis-data:/var/lib/ocis/data
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.ocis.entrypoints=http"

@@ -107,7 +107,7 @@ services:
       STORAGE_LDAP_IDP: https://${OCIS_DOMAIN:-ocis.owncloud.test}
     volumes:
       - ./config/ocis:/config
-      - ocis-data:/var/tmp/ocis
+      - ocis-data:/var/lib/ocis/data
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.ocis.entrypoints=http"
@@ -197,12 +197,7 @@ volumes:
   certs:
   ocis-data:
   files:
-    driver: local
   mysql:
-    driver: local
   backup:
-    driver: local
   redis:
-    driver: local
   tmp:
-    driver: local
