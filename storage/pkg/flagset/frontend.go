@@ -44,7 +44,6 @@ func FrontendWithConfig(cfg *config.Config) []cli.Flag {
 			EnvVars:     []string{"STORAGE_WEBDAV_NAMESPACE"},
 			Destination: &cfg.Reva.OCDav.WebdavNamespace,
 		},
-
 		// the /dav/files endpoint expects a username as the first path segment
 		// this can eg. be set to /eos/users
 		&cli.StringFlag{
