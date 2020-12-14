@@ -32,10 +32,10 @@ func FrontendWithConfig(cfg *config.Config) []cli.Flag {
 
 		&cli.StringFlag{
 			Name:        "chunk-folder",
-			Value:       "/var/tmp/ocis/tmp/chunks",
+			Value:       "./data/storage/chunks",
 			Usage:       "temp directory for chunked uploads",
 			EnvVars:     []string{"STORAGE_CHUNK_FOLDER"},
-			Destination: &cfg.Reva.OCDav.WebdavNamespace,
+			Destination: &cfg.Reva.OCDav.ChunkFolder,
 		},
 		&cli.StringFlag{
 			Name:        "webdav-namespace",
