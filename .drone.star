@@ -1500,7 +1500,6 @@ def frontend(module):
 
 def ocisServer(storage, accounts_hash_difficulty = 4, volumes=[]):
   environment = {
-    #'OCIS_LOG_LEVEL': 'debug',
     'STORAGE_HOME_DRIVER': '%s' % (storage),
     'STORAGE_USERS_DRIVER': '%s' % (storage),
     'STORAGE_DRIVER_OCIS_ROOT': '/srv/app/tmp/ocis/storage/users',
@@ -1522,6 +1521,7 @@ def ocisServer(storage, accounts_hash_difficulty = 4, volumes=[]):
     'KONNECTD_ISS': 'https://ocis-server:9200',
     'KONNECTD_TLS': 'true',
     'OCIS_LOG_LEVEL': 'warn',
+    'SETTINGS_DATA_PATH': '/srv/app/tmp/ocis/settings',
   }
 
   # Pass in "default" accounts_hash_difficulty to not set this environment variable.
