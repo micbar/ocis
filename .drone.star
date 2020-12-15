@@ -1435,6 +1435,7 @@ def ocisServer(storage, accounts_hash_difficulty = 4, volumes=[]):
     'KONNECTD_TLS': 'true',
     'OCIS_LOG_LEVEL': 'warn',
     'STORAGE_CHUNK_FOLDER': '/var/tmp/ocis/chunks',
+    'STORAGE_DRIVER_OWNCLOUD_UPLOADINFO_DIR': "/tmp",
   }
 
   # Pass in "default" accounts_hash_difficulty to not set this environment variable.

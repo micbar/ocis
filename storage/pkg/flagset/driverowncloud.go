@@ -17,7 +17,7 @@ func DriverOwnCloudWithConfig(cfg *config.Config) []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:        "storage-owncloud-uploadinfo-dir",
-			Value:       ".data/storage/uploadinfo",
+			Value:       "./data/storage/uploadinfo",
 			Usage:       "the path to the tus upload info directory",
 			EnvVars:     []string{"STORAGE_DRIVER_OWNCLOUD_UPLOADINFO_DIR"},
 			Destination: &cfg.Reva.Storages.OwnCloud.UploadInfoDir,
