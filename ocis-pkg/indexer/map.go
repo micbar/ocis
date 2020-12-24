@@ -1,8 +1,11 @@
 package indexer
 
-import "github.com/owncloud/ocis/ocis-pkg/indexer/index"
+import (
+	"github.com/owncloud/ocis/ocis-pkg/indexer/index"
+)
 
 // typeMap stores the indexer layout at runtime.
+// todo evaluate sync.map
 
 type typeMap map[tName]typeMapping
 type tName = string

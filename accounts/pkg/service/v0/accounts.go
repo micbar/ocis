@@ -11,7 +11,6 @@ import (
 	"path"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/owncloud/ocis/ocis-pkg/log"
@@ -32,9 +31,6 @@ import (
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-// accLock mutually exclude readers from writers on account files
-var accLock sync.Mutex
 
 // passwordValidCache caches basic auth password validations
 var passwordValidCache = cache.NewCache(cache.Size(1024))
@@ -133,9 +129,6 @@ func (s Service) ListAccounts(ctx context.Context, in *proto.ListAccountsRequest
 	}
 	onlySelf := hasSelf && !hasManagement
 
-	accLock.Lock()
-	defer accLock.Unlock()
-
 	teardownServiceUser := s.serviceUserToIndex()
 	defer teardownServiceUser()
 	match, authRequest := getAuthQueryMatch(in.Query)
@@ -174,9 +167,7 @@ func (s Service) ListAccounts(ctx context.Context, in *proto.ListAccountsRequest
 		//   result by the (k) as key and (v) as value. If not it errors
 		// - if a entry is found it checks if the given value matches (v). If it doesnt match the cache entry gets removed
 		//   and it errors.
-		//
-		// if many concurrent requests from the same user come in within a short period of time, it's possible that e is still nil.
-		// This is why all this needs to be wrapped within a sync.Mutex locking to prevent calling bcrypt.CompareHashAndPassword unnecessarily too often.
+
 		{
 			var suspicious bool
 
@@ -284,8 +275,6 @@ func (s Service) GetAccount(ctx context.Context, in *proto.GetAccountRequest, ou
 	}
 	onlySelf := hasSelf && !hasManagement
 
-	accLock.Lock()
-	defer accLock.Unlock()
 	var id string
 	if id, err = cleanupID(in.Id); err != nil {
 		return merrors.InternalServerError(s.id, "could not clean up account id: %v", err.Error())
@@ -331,8 +320,6 @@ func (s Service) CreateAccount(ctx context.Context, in *proto.CreateAccountReque
 		return merrors.Forbidden(s.id, "no permission for CreateAccount")
 	}
 
-	accLock.Lock()
-	defer accLock.Unlock()
 	var id string
 
 	if in.Account == nil {
@@ -351,7 +338,6 @@ func (s Service) CreateAccount(ctx context.Context, in *proto.CreateAccountReque
 	if id, err = cleanupID(out.Id); err != nil {
 		return merrors.InternalServerError(s.id, "could not clean up account id: %v", err.Error())
 	}
-
 	exists, err := s.accountExists(ctx, out.PreferredName, out.Mail, out.Id)
 	if err != nil {
 		return merrors.InternalServerError(s.id, "could not check if account exists: %v", err.Error())
@@ -386,6 +372,7 @@ func (s Service) CreateAccount(ctx context.Context, in *proto.CreateAccountReque
 		s.debugLogAccount(out).Msg("could not persist new account")
 		return merrors.InternalServerError(s.id, "could not persist new account: %v", err.Error())
 	}
+
 	indexResults, err := s.index.Add(out)
 	if err != nil {
 		s.rollbackCreateAccount(ctx, out)
@@ -468,8 +455,6 @@ func (s Service) UpdateAccount(ctx context.Context, in *proto.UpdateAccountReque
 	}
 	onlySelf := hasSelf && !hasManagement
 
-	accLock.Lock()
-	defer accLock.Unlock()
 	var id string
 	if in.Account == nil {
 		return merrors.BadRequest(s.id, "account missing")
@@ -633,8 +618,6 @@ func (s Service) DeleteAccount(ctx context.Context, in *proto.DeleteAccountReque
 		return merrors.Forbidden(s.id, "no permission for DeleteAccount")
 	}
 
-	accLock.Lock()
-	defer accLock.Unlock()
 	var id string
 	if id, err = cleanupID(in.Id); err != nil {
 		return merrors.InternalServerError(s.id, "could not clean up account id: %v", err.Error())

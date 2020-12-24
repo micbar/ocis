@@ -1,10 +1,11 @@
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import resolve from '@rollup/plugin-node-resolve';
-import babel from 'rollup-plugin-babel';
-import { terser } from 'rollup-plugin-terser';
-import multiInput from 'rollup-plugin-multi-input';
 import utils from '@rollup/pluginutils';
+import babel from 'rollup-plugin-babel';
+import multiInput from 'rollup-plugin-multi-input';
+import { terser } from 'rollup-plugin-terser';
+
 import pkg from './package.json';
 
 const extensions = ['.js', '.ts'];
@@ -23,7 +24,7 @@ export default [
         ],
         plugins: [
             multiInput({
-                transformOutputPath: (output, input) => `${output.split('/').join('-')}`,
+                transformOutputPath: (output, input) => `${output.split('/').join('-').replace(/_/g, '-')}`,
             }),
             json(),
             resolve({
