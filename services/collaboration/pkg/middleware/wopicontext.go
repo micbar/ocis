@@ -8,9 +8,9 @@ import (
 	"regexp"
 
 	appproviderv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	rjwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/config"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/helpers"
@@ -29,7 +29,6 @@ type WopiContext struct {
 	AccessToken   string
 	ViewOnlyToken string
 	FileReference *providerv1beta1.Reference
-	User          *userv1beta1.User
 	ViewMode      appproviderv1beta1.ViewMode
 }
 
@@ -76,11 +75,21 @@ func WopiContextAuthMiddleware(cfg *config.Config, next http.Handler) http.Handl
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
+		tokenManager, err := rjwt.New(map[string]interface{}{
+			"secret":  cfg.TokenManager.JWTSecret,
+			"expires": int64(24 * 60 * 60),
+		})
+		user, _, err := tokenManager.DismantleToken(ctx, wopiContextAccessToken)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
 		claims.WopiContext.AccessToken = wopiContextAccessToken
 
 		ctx = context.WithValue(ctx, wopiContextKey, claims.WopiContext)
 		// authentication for the CS3 api
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, claims.WopiContext.AccessToken)
+		ctx = ctxpkg.ContextSetUser(ctx, user)
 
 		// include additional info in the context's logger
 		// we might need to check https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/common-headers
@@ -94,7 +103,7 @@ func WopiContextAuthMiddleware(cfg *config.Config, next http.Handler) http.Handl
 			Str("WopiStamp", r.Header.Get("X-WOPI-TimeStamp")).
 			Str("FileReference", claims.WopiContext.FileReference.String()).
 			Str("ViewMode", claims.WopiContext.ViewMode.String()).
-			Str("Requester", claims.WopiContext.User.GetId().String()).
+			Str("Requester", user.GetId().String()).
 			Logger()
 		ctx = wopiLogger.WithContext(ctx)
 

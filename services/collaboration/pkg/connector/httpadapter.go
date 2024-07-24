@@ -10,21 +10,23 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/config"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/connector/utf7"
+	"github.com/owncloud/ocis/v2/services/collaboration/pkg/helpers"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/locks"
 	"github.com/rs/zerolog"
 )
 
 const (
-	HeaderWopiLock          string = "X-WOPI-Lock"
-	HeaderWopiOldLock       string = "X-WOPI-OldLock"
-	HeaderWopiST            string = "X-WOPI-SuggestedTarget"
-	HeaderWopiRT            string = "X-WOPI-RelativeTarget"
-	HeaderWopiOverwriteRT   string = "X-WOPI-OverwriteRelativeTarget"
-	HeaderWopiSize          string = "X-WOPI-Size"
-	HeaderWopiValidRT       string = "X-WOPI-ValidRelativeTarget"
-	HeaderWopiRequestedName string = "X-WOPI-RequestedName"
-	HeaderContentLength     string = "Content-Length"
-	HeaderContentType       string = "Content-Type"
+	HeaderWopiLock              string = "X-WOPI-Lock"
+	HeaderWopiOldLock           string = "X-WOPI-OldLock"
+	HeaderWopiLockFailureReason string = "X-WOPI-LockFailureReason"
+	HeaderWopiST                string = "X-WOPI-SuggestedTarget"
+	HeaderWopiRT                string = "X-WOPI-RelativeTarget"
+	HeaderWopiOverwriteRT       string = "X-WOPI-OverwriteRelativeTarget"
+	HeaderWopiSize              string = "X-WOPI-Size"
+	HeaderWopiValidRT           string = "X-WOPI-ValidRelativeTarget"
+	HeaderWopiRequestedName     string = "X-WOPI-RequestedName"
+	HeaderContentLength         string = "Content-Length"
+	HeaderContentType           string = "Content-Type"
 )
 
 // HttpAdapter will adapt the responses from the connector to HTTP.
@@ -50,9 +52,9 @@ func NewHttpAdapter(gwc gatewayv1beta1.GatewayAPIClient, cfg *config.Config) *Ht
 		),
 	}
 
-	httpAdapter.locks = &locks.NoopLockParser{}
-	if strings.ToLower(cfg.App.Name) == "microsoftofficeonline" {
-		httpAdapter.locks = &locks.LegacyLockParser{}
+	switch strings.ToLower(cfg.App.Name) {
+	default:
+		httpAdapter.locks = &locks.NoopLockParser{}
 	}
 	return httpAdapter
 }
@@ -74,6 +76,7 @@ func (h *HttpAdapter) GetLock(w http.ResponseWriter, r *http.Request) {
 	fileCon := h.con.GetFileConnector()
 	response, err := fileCon.GetLock(r.Context())
 
+	w.Header().Set(HeaderWopiLock, response)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -116,6 +119,9 @@ func (h *HttpAdapter) RefreshLock(w http.ResponseWriter, r *http.Request) {
 	fileCon := h.con.GetFileConnector()
 	response, err := fileCon.RefreshLock(r.Context(), lockID)
 
+	newLockID, mtime, err := fileCon.RefreshLock(r.Context(), lockID)
+	w.Header().Set(HeaderWopiLock, r.Header.Get(HeaderWopiLock))
+	helpers.SetVersionHeader(w, mtime)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -135,6 +141,9 @@ func (h *HttpAdapter) UnLock(w http.ResponseWriter, r *http.Request) {
 	fileCon := h.con.GetFileConnector()
 	response, err := fileCon.UnLock(r.Context(), lockID)
 
+	newLockID, mtime, err := fileCon.UnLock(r.Context(), lockID)
+	w.Header().Set(HeaderWopiLock, r.Header.Get(HeaderWopiLock))
+	helpers.SetVersionHeader(w, mtime)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -189,6 +198,8 @@ func (h *HttpAdapter) PutFile(w http.ResponseWriter, r *http.Request) {
 	contentCon := h.con.GetContentConnector()
 	response, err := contentCon.PutFile(r.Context(), r.Body, r.ContentLength, lockID)
 
+	mtime, newLockID, err := contentCon.PutFile(r.Context(), r.Body, r.ContentLength, lockID)
+	helpers.SetVersionHeader(w, mtime)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

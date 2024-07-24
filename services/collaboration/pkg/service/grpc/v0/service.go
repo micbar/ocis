@@ -109,7 +109,6 @@ func (s *Service) OpenInApp(
 		AccessToken:   req.GetAccessToken(), // it will be encrypted
 		ViewOnlyToken: utils.ReadPlainFromOpaque(req.GetOpaque(), "viewOnlyToken"),
 		FileReference: &providerFileRef,
-		User:          user,
 		ViewMode:      req.GetViewMode(),
 	}
 
@@ -215,6 +214,38 @@ func (s *Service) addQueryToURL(baseURL string, req *appproviderv1beta1.OpenInAp
 	}
 
 	lang := utils.ReadPlainFromOpaque(req.GetOpaque(), "lang")
+
+	// @TODO: this is a temporary solution until we figure out how to send these from oc web
+	switch lang {
+	case "bg":
+		lang = "bg-BG"
+	case "cs":
+		lang = "cs-CZ"
+	case "de":
+		lang = "de-DE"
+	case "en":
+		lang = "en-US"
+	case "es":
+		lang = "es-ES"
+	case "fr":
+		lang = "fr-FR"
+	case "gl":
+		lang = "gl-ES"
+	case "it":
+		lang = "it-IT"
+	case "nl":
+		lang = "nl-NL"
+	case "ko":
+		lang = "ko-KR"
+	case "sq":
+		lang = "sq-AL"
+	case "sv":
+		lang = "sv-SE"
+	case "tr":
+		lang = "tr-TR"
+	case "zh":
+		lang = "zh-CN"
+	}
 
 	if lang != "" {
 		switch strings.ToLower(s.config.App.Name) {
