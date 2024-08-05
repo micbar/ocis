@@ -1,6 +1,7 @@
 package wopisrc
 
 import (
+	"errors"
 	"net/url"
 	"path"
 
@@ -13,16 +14,19 @@ import (
 // as a jwt token that is signed with the proxy secret and contains the file reference
 // and the WOPI src URL.
 // Example:
-// https://localhost:9300/wopi/files/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiZm9vIiwiZiI6ImJhciJ9.123456?access_token=123456&access_token_ttl=1234
+// https://cloud.proxy.com/wopi/files/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiaHR0cHM6Ly9vY2lzLnRlYW0vd29waS9maWxlcy8iLCJmIjoiMTIzNDU2In0.6ol9PQXGKktKfAri8tsJ4X_a9rIeosJ7id6KTQW6Ui0
 //
 // If no proxy URL and proxy secret are configured, the URL will be generated
 // as a direct URL that contains the file reference.
 // Example:
-// https://localhost:9300/wopi/files/12312678470610632091729803710923&access_token=123456&access_token_ttl=1234
+// https:/ocis.team/wopi/files/12312678470610632091729803710923
 func GenerateWopiSrc(fileRef string, cfg *config.Config) (*url.URL, error) {
 	wopiSrcURL, err := url.Parse(cfg.Wopi.WopiSrc)
 	if err != nil {
 		return nil, err
+	}
+	if wopiSrcURL.Host == "" {
+		return nil, errors.New("invalid WopiSrc URL")
 	}
 
 	if cfg.Wopi.ProxyURL != "" && cfg.Wopi.ProxySecret != "" {
@@ -41,6 +45,9 @@ func generateProxySrc(fileRef string, proxyUrl string, proxySecret string, wopiS
 	proxyURL, err := url.Parse(proxyUrl)
 	if err != nil {
 		return nil, err
+	}
+	if proxyURL.Host == "" {
+		return nil, errors.New("invalid proxy URL")
 	}
 
 	wopiSrcURL.Path = path.Join("wopi", "files")
