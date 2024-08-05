@@ -175,7 +175,7 @@ var _ = Describe("Discovery", func() {
 			Expect(err).To(Succeed())
 			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(resp.GetAppUrl().GetMethod()).To(Equal("POST"))
-			Expect(resp.GetAppUrl().GetAppUrl()).To(Equal("https://test.server.prv/hosting/wopi/word/edit?UI_LLCC=de&WOPISrc=https%3A%2F%2Fwopiserver.test.prv%2Fwopi%2Ffiles%2F2f6ec18696dd1008106749bd94106e5cfad5c09e15de7b77088d03843e71b43e&lang=de&ui=de"))
+			Expect(resp.GetAppUrl().GetAppUrl()).To(Equal("https://test.server.prv/hosting/wopi/word/edit?UI_LLCC=de-DE&WOPISrc=https%3A%2F%2Fwopiserver.test.prv%2Fwopi%2Ffiles%2F2f6ec18696dd1008106749bd94106e5cfad5c09e15de7b77088d03843e71b43e&lang=de-DE&ui=de-DE"))
 			Expect(resp.GetAppUrl().GetFormParameters()["access_token_ttl"]).To(Equal(strconv.FormatInt(nowTime.Add(5*time.Hour).Unix()*1000, 10)))
 		})
 
@@ -263,7 +263,7 @@ var _ = Describe("Discovery", func() {
 			Expect(err).To(Succeed())
 			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(resp.GetAppUrl().GetMethod()).To(Equal("POST"))
-			Expect(resp.GetAppUrl().GetAppUrl()).To(Equal("https://test.server.prv/hosting/wopi/word/edit?UI_LLCC=en&WOPISrc=https%3A%2F%2Foffice.proxy.test.prv%2Fwopi%2Ffiles%2FeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiaHR0cHM6Ly93b3Bpc2VydmVyLnRlc3QucHJ2IiwiZiI6IjJmNmVjMTg2OTZkZDEwMDgxMDY3NDliZDk0MTA2ZTVjZmFkNWMwOWUxNWRlN2I3NzA4OGQwMzg0M2U3MWI0M2UifQ.BNGvwU-2er6xrTy5q1MvfFpENBGNops4Hx1zCkG8z8I&lang=en&ui=en"))
+			Expect(resp.GetAppUrl().GetAppUrl()).To(Equal("https://test.server.prv/hosting/wopi/word/edit?UI_LLCC=en-US&WOPISrc=https%3A%2F%2Foffice.proxy.test.prv%2Fwopi%2Ffiles%2FeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiaHR0cHM6Ly93b3Bpc2VydmVyLnRlc3QucHJ2L3dvcGkvZmlsZXMvIiwiZiI6IjJmNmVjMTg2OTZkZDEwMDgxMDY3NDliZDk0MTA2ZTVjZmFkNWMwOWUxNWRlN2I3NzA4OGQwMzg0M2U3MWI0M2UifQ.yfyLHZ18Z1MFOa6u7AP0LqfIiQ9X5AMkYauEZGhbCNs&lang=en-US&ui=en-US"))
 			Expect(resp.GetAppUrl().GetFormParameters()["access_token_ttl"]).To(Equal(strconv.FormatInt(nowTime.Add(5*time.Hour).Unix()*1000, 10)))
 		})
 
