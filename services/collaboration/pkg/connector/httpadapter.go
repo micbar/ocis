@@ -246,7 +246,7 @@ func (h *HttpAdapter) PutFile(w http.ResponseWriter, r *http.Request) {
 	lockID := h.locks.ParseLock(r.Header.Get(HeaderWopiLock))
 
 	contentCon := h.con.GetContentConnector()
-	mtime, newLockID, err := contentCon.PutFile(r.Context(), r.Body, r.ContentLength, lockID)
+	newLockID, mtime, err := contentCon.PutFile(r.Context(), r.Body, r.ContentLength, lockID)
 	helpers.SetVersionHeader(w, mtime)
 	if err != nil {
 		var conError *ConnectorError

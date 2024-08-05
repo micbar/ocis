@@ -75,15 +75,18 @@ type FileConnectorService interface {
 	// is provided (not empty), the method will perform an unlockAndRelock
 	// operation (unlock the file with the oldLockID and immediately relock
 	// the file with the new lockID).
-	// The current lockID will be returned if a conflict happens
+	// The current lock will be returned if a conflict happens
+	// The timestamp of the file will be returned
 	Lock(ctx context.Context, lockID, oldLockID string) (*providerv1beta1.Lock, *typesv1beta1.Timestamp, error)
 	// RefreshLock will extend the lock time 30 minutes. The current lockID
 	// needs to be provided.
 	// The current lockID will be returned if a conflict happens
+	// The timestamp of the file will be returned
 	RefreshLock(ctx context.Context, lockID string) (string, *typesv1beta1.Timestamp, error)
-	// Unlock will unlock the target file. The current lockID needs to be
+	// UnLock will unlock the target file. The current lockID needs to be
 	// provided.
 	// The current lockID will be returned if a conflict happens
+	// The timestamp of the file will be returned
 	UnLock(ctx context.Context, lockID string) (string, *typesv1beta1.Timestamp, error)
 	// CheckFileInfo will return the file information of the target file
 	CheckFileInfo(ctx context.Context) (fileinfo.FileInfo, error)
@@ -201,6 +204,8 @@ func (f *FileConnector) GetLock(ctx context.Context) (string, error) {
 // the method will return an empty lock id.
 //
 // For the "unlock and relock" operation, the behavior will be the same.
+//
+// On success, the mtime of the file will be returned.
 func (f *FileConnector) Lock(ctx context.Context, lockID, oldLockID string) (*providerv1beta1.Lock, *typesv1beta1.Timestamp, error) {
 	wopiContext, err := middleware.WopiContextFromCtx(ctx)
 	if err != nil {
@@ -357,6 +362,8 @@ func (f *FileConnector) Lock(ctx context.Context, lockID, oldLockID string) (*pr
 // return an empty lock id.
 // The conflict happens if the provided lockID doesn't match the one actually
 // applied in the target file.
+//
+// On success, the mtime of the file will be returned.
 func (f *FileConnector) RefreshLock(ctx context.Context, lockID string) (string, *typesv1beta1.Timestamp, error) {
 	wopiContext, err := middleware.WopiContextFromCtx(ctx)
 	if err != nil {
@@ -481,6 +488,8 @@ func (f *FileConnector) RefreshLock(ctx context.Context, lockID string) (string,
 // return an empty lock id.
 // The conflict happens if the provided lockID doesn't match the one actually
 // applied in the target file.
+//
+// On success, the mtime of the file will be returned.
 func (f *FileConnector) UnLock(ctx context.Context, lockID string) (string, *typesv1beta1.Timestamp, error) {
 	wopiContext, err := middleware.WopiContextFromCtx(ctx)
 	if err != nil {
@@ -773,7 +782,7 @@ func (f *FileConnector) PutRelativeFileRelative(ctx context.Context, ccs Content
 
 	var conError *ConnectorError
 	// try to put the file
-	_, lockID, err := ccs.PutFile(newCtx, stream, streamLength, "")
+	lockID, _, err := ccs.PutFile(newCtx, stream, streamLength, "")
 	if err != nil {
 		// if the error isn't a connectorError, fail the request
 		if !errors.As(err, &conError) {

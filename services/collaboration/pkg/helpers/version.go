@@ -10,7 +10,7 @@ import (
 // SetVersionHeader sets a WOPI version header on the response writer
 func SetVersionHeader(w http.ResponseWriter, t *typesv1beta1.Timestamp) {
 	// non-canonical headers can only be set directly on the header map
-	w.Header()["X-WOPI-ItemVersion"] = []string{GetVersion(t)}
+	w.Header().Set("X-WOPI-ItemVersion", GetVersion(t))
 }
 
 // GetVersion returns a string representation of the timestamp
