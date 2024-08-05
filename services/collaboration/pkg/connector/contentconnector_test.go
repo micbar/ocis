@@ -13,7 +13,6 @@ import (
 
 	appproviderv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	revactx "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
@@ -52,7 +51,6 @@ var _ = Describe("ContentConnector", func() {
 				},
 				Path: ".",
 			},
-			User:     &userv1beta1.User{}, // Not used for now
 			ViewMode: appproviderv1beta1.ViewMode_VIEW_MODE_READ_WRITE,
 		}
 
@@ -78,14 +76,14 @@ var _ = Describe("ContentConnector", func() {
 
 	Describe("GetFile", func() {
 		It("No valid context", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 			ctx := context.Background()
 			err := cc.GetFile(ctx, sb)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("Initiate download failed", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 			ctx := middleware.WopiContextToCtx(context.Background(), wopiCtx)
 
 			targetErr := errors.New("Something went wrong")
@@ -98,7 +96,7 @@ var _ = Describe("ContentConnector", func() {
 		})
 
 		It("Initiate download status not ok", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 			ctx := middleware.WopiContextToCtx(context.Background(), wopiCtx)
 
 			gatewayClient.On("InitiateFileDownload", mock.Anything, mock.Anything).Times(1).Return(&gateway.InitiateFileDownloadResponse{
@@ -112,7 +110,7 @@ var _ = Describe("ContentConnector", func() {
 		})
 
 		It("Missing download endpoint", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 			ctx := middleware.WopiContextToCtx(context.Background(), wopiCtx)
 
 			gatewayClient.On("InitiateFileDownload", mock.Anything, mock.Anything).Times(1).Return(&gateway.InitiateFileDownloadResponse{
@@ -126,7 +124,7 @@ var _ = Describe("ContentConnector", func() {
 		})
 
 		It("Download request failed", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 			ctx := middleware.WopiContextToCtx(context.Background(), wopiCtx)
 
 			gatewayClient.On("InitiateFileDownload", mock.Anything, mock.Anything).Times(1).Return(&gateway.InitiateFileDownloadResponse{
@@ -149,7 +147,7 @@ var _ = Describe("ContentConnector", func() {
 		})
 
 		It("Download request success", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 			ctx := middleware.WopiContextToCtx(context.Background(), wopiCtx)
 
 			gatewayClient.On("InitiateFileDownload", mock.Anything, mock.Anything).Times(1).Return(&gateway.InitiateFileDownloadResponse{
@@ -167,11 +165,11 @@ var _ = Describe("ContentConnector", func() {
 			Expect(srvReqHeader.Get("X-Access-Token")).To(Equal(wopiCtx.AccessToken))
 			Expect(srvReqHeader.Get("X-Reva-Transfer")).To(Equal("MyDownloadToken"))
 			Expect(err).To(Succeed())
-			Expect(sb.String()).To(Equal(randomContent))
+			Expect(sb.Body.String()).To(Equal(randomContent))
 		})
 
 		It("ViewOnlyMode Download request success", func() {
-			sb := &strings.Builder{}
+			sb := httptest.NewRecorder()
 
 			wopiCtx = middleware.WopiContext{
 				AccessToken:   "abcdef123456",
@@ -184,7 +182,6 @@ var _ = Describe("ContentConnector", func() {
 					},
 					Path: ".",
 				},
-				User:     &userv1beta1.User{}, // Not used for now
 				ViewMode: appproviderv1beta1.ViewMode_VIEW_MODE_VIEW_ONLY,
 			}
 
@@ -208,7 +205,7 @@ var _ = Describe("ContentConnector", func() {
 			Expect(srvReqHeader.Get("X-Access-Token")).To(Equal(wopiCtx.ViewOnlyToken))
 			Expect(srvReqHeader.Get("X-Reva-Transfer")).To(Equal("MyDownloadToken"))
 			Expect(err).To(Succeed())
-			Expect(sb.String()).To(Equal(randomContent))
+			Expect(sb.Body.String()).To(Equal(randomContent))
 		})
 	})
 
@@ -216,9 +213,10 @@ var _ = Describe("ContentConnector", func() {
 		It("No valid context", func() {
 			reader := strings.NewReader("Content to upload is here!")
 			ctx := context.Background()
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
+			newLockId, mtime, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
 			Expect(err).To(HaveOccurred())
-			Expect(response).To(BeNil())
+			Expect(newLockId).To(Equal(""))
+			Expect(mtime).To(Equal(""))
 		})
 
 		It("Stat call failed", func() {
@@ -230,9 +228,9 @@ var _ = Describe("ContentConnector", func() {
 				Status: status.NewInternal(ctx, "Something failed"),
 			}, targetErr)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
 			Expect(err).To(Equal(targetErr))
-			Expect(response).To(BeNil())
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("Stat call status not ok", func() {
@@ -243,10 +241,11 @@ var _ = Describe("ContentConnector", func() {
 				Status: status.NewInternal(ctx, "Something failed"),
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
-			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(500))
-			Expect(response.Headers).To(BeNil())
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
+			Expect(err).To(HaveOccurred())
+			conErr := err.(*connector.ConnectorError)
+			Expect(conErr.HttpCodeOut).To(Equal(500))
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("Mismatched lockId", func() {
@@ -263,10 +262,11 @@ var _ = Describe("ContentConnector", func() {
 				},
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
-			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(409))
-			Expect(response.Headers[connector.HeaderWopiLock]).To(Equal("goodAndValidLock"))
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
+			Expect(err).To(HaveOccurred())
+			conErr := err.(*connector.ConnectorError)
+			Expect(conErr.HttpCodeOut).To(Equal(409))
+			Expect(newLockId).To(Equal("goodAndValidLock"))
 		})
 
 		It("Upload without lockId but on a non empty file", func() {
@@ -281,10 +281,11 @@ var _ = Describe("ContentConnector", func() {
 				},
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "")
-			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(409))
-			Expect(response.Headers[connector.HeaderWopiLock]).To(Equal(""))
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "")
+			Expect(err).To(HaveOccurred())
+			conErr := err.(*connector.ConnectorError)
+			Expect(conErr.HttpCodeOut).To(Equal(409))
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("Initiate upload fails", func() {
@@ -307,9 +308,9 @@ var _ = Describe("ContentConnector", func() {
 				Status: status.NewInternal(ctx, "Something failed"),
 			}, targetErr)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
 			Expect(err).To(HaveOccurred())
-			Expect(response).To(BeNil())
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("Initiate upload status not ok", func() {
@@ -331,10 +332,11 @@ var _ = Describe("ContentConnector", func() {
 				Status: status.NewInternal(ctx, "Something failed"),
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
-			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(500))
-			Expect(response.Headers).To(BeNil())
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
+			Expect(err).To(HaveOccurred())
+			conErr := err.(*connector.ConnectorError)
+			Expect(conErr.HttpCodeOut).To(Equal(500))
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("Empty upload successful", func() {
@@ -356,10 +358,10 @@ var _ = Describe("ContentConnector", func() {
 				Status: status.NewOK(ctx),
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
+			newLockId, mtime, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
 			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(200))
-			Expect(response.Headers).To(BeNil())
+			Expect(newLockId).To(Equal(""))
+			Expect(mtime).To(Equal(""))
 		})
 
 		It("Missing upload endpoint", func() {
@@ -381,10 +383,11 @@ var _ = Describe("ContentConnector", func() {
 				Status: status.NewOK(ctx),
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
-			Expect(err).To(BeNil())
-			Expect(response.Status).To(Equal(500))
-			Expect(response.Headers).To(BeNil())
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
+			Expect(err).To(HaveOccurred())
+			conErr := err.(*connector.ConnectorError)
+			Expect(conErr.HttpCodeOut).To(Equal(500))
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("upload request failed", func() {
@@ -412,11 +415,12 @@ var _ = Describe("ContentConnector", func() {
 				},
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
+			newLockId, _, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
 			Expect(srvReqHeader.Get("X-Access-Token")).To(Equal(wopiCtx.AccessToken))
-			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(500))
-			Expect(response.Headers).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			conErr := err.(*connector.ConnectorError)
+			Expect(conErr.HttpCodeOut).To(Equal(500))
+			Expect(newLockId).To(Equal(""))
 		})
 
 		It("upload request success", func() {
@@ -444,11 +448,11 @@ var _ = Describe("ContentConnector", func() {
 				},
 			}, nil)
 
-			response, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
+			newLockId, mtime, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
 			Expect(srvReqHeader.Get("X-Access-Token")).To(Equal(wopiCtx.AccessToken))
 			Expect(err).To(Succeed())
-			Expect(response.Status).To(Equal(200))
-			Expect(response.Headers).To(BeNil())
+			Expect(newLockId).To(Equal(""))
+			Expect(mtime).To(Equal(""))
 		})
 	})
 })
