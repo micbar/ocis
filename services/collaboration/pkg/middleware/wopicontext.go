@@ -79,6 +79,10 @@ func WopiContextAuthMiddleware(cfg *config.Config, next http.Handler) http.Handl
 			"secret":  cfg.TokenManager.JWTSecret,
 			"expires": int64(24 * 60 * 60),
 		})
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
 		user, _, err := tokenManager.DismantleToken(ctx, wopiContextAccessToken)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)

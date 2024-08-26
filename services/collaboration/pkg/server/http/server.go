@@ -121,7 +121,9 @@ func prepareRoutes(r *chi.Mux, options Options) {
 					// authentication and wopi context
 					return colabmiddleware.WopiContextAuthMiddleware(options.Config, h)
 				},
-				colabmiddleware.CollaborationTracingMiddleware,
+				func(h stdhttp.Handler) stdhttp.Handler {
+					return colabmiddleware.CollaborationTracingMiddleware(options.Config, h)
+				},
 			)
 
 			// check whether we should check for proof keys

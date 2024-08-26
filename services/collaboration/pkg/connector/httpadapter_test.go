@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -49,7 +48,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.On("GetLock", mock.Anything).Times(1).Return("", errors.New("Something happened"))
+			fc.On("GetLock", mock.Anything).Times(1).Return(nil, errors.New("Something happened"))
 
 			httpAdapter.GetLock(w, req)
 			resp := w.Result()
@@ -62,7 +61,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.On("GetLock", mock.Anything).Times(1).Return("", connector.NewConnectorError(404, "Couldn't get the file"))
+			fc.On("GetLock", mock.Anything).Times(1).Return(connector.NewResponse(404), nil)
 
 			httpAdapter.GetLock(w, req)
 			resp := w.Result()
@@ -75,7 +74,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.On("GetLock", mock.Anything).Times(1).Return("zzz111", nil)
+			fc.On("GetLock", mock.Anything).Times(1).Return(connector.NewResponseWithLock(200, "zzz111"), nil)
 
 			httpAdapter.GetLock(w, req)
 			resp := w.Result()
@@ -89,7 +88,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.On("GetLock", mock.Anything).Times(1).Return("", nil)
+			fc.On("GetLock", mock.Anything).Times(1).Return(connector.NewResponseWithLock(200, ""), nil)
 
 			httpAdapter.GetLock(w, req)
 			resp := w.Result()
@@ -107,7 +106,7 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.On("Lock", mock.Anything, "abc123", "").Times(1).Return(&providerv1beta1.Lock{}, &typesv1beta1.Timestamp{}, errors.New("Something happened"))
+				fc.On("Lock", mock.Anything, "abc123", "").Times(1).Return(nil, errors.New("Something happened"))
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
@@ -121,8 +120,7 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "", "").Times(1).
-					Return(&providerv1beta1.Lock{}, &typesv1beta1.Timestamp{}, connector.NewConnectorError(400, "No lockId"))
+				fc.On("Lock", mock.Anything, "", "").Times(1).Return(connector.NewResponse(400), nil)
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
@@ -136,13 +134,13 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "abc123", "").Times(1).
-					Return(&providerv1beta1.Lock{LockId: "zzz111"}, nil, connector.NewConnectorError(409, "Lock conflict"))
+				fc.On("Lock", mock.Anything, "abc123", "").Times(1).Return(connector.NewResponseLockConflict("zzz111", "Lock Conflict"), nil)
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
 				Expect(resp.StatusCode).To(Equal(409))
 				Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("zzz111"))
+				Expect(resp.Header.Get(connector.HeaderWopiLockFailureReason)).To(Equal("Lock Conflict"))
 			})
 
 			It("Success", func() {
@@ -152,13 +150,18 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "abc123", "").Times(1).
-					Return(&providerv1beta1.Lock{LockId: "abc123"}, &typesv1beta1.Timestamp{}, nil)
+				fc.On("Lock", mock.Anything, "abc123", "").Times(1).Return(
+					connector.NewResponseWithVersionAndLock(
+						200,
+						&typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)},
+						"abc123",
+					), nil)
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
 				Expect(resp.StatusCode).To(Equal(200))
 				Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("abc123"))
+				Expect(resp.Header.Get(connector.HeaderWopiVersion)).To(Equal("v1234567"))
 			})
 		})
 
@@ -171,8 +174,7 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "abc123", "qwerty").Times(1).
-					Return(nil, nil, errors.New("Something happened"))
+				fc.On("Lock", mock.Anything, "abc123", "qwerty").Times(1).Return(nil, errors.New("Something happened"))
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
@@ -187,8 +189,7 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "", "").Times(1).
-					Return(nil, nil, connector.NewConnectorError(400, "No lockId"))
+				fc.On("Lock", mock.Anything, "", "").Times(1).Return(connector.NewResponse(400), nil)
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
@@ -203,13 +204,13 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "abc123", "qwerty").Times(1).
-					Return(&providerv1beta1.Lock{LockId: "zzz111"}, nil, connector.NewConnectorError(409, "Lock conflict"))
+				fc.On("Lock", mock.Anything, "abc123", "qwerty").Times(1).Return(connector.NewResponseLockConflict("zzz111", "Lock Conflict"), nil)
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
 				Expect(resp.StatusCode).To(Equal(409))
 				Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("zzz111"))
+				Expect(resp.Header.Get(connector.HeaderWopiLockFailureReason)).To(Equal("Lock Conflict"))
 			})
 
 			It("Success", func() {
@@ -220,14 +221,18 @@ var _ = Describe("HttpAdapter", func() {
 
 				w := httptest.NewRecorder()
 
-				fc.EXPECT().Lock(mock.Anything, "abc123", "qwerty").Times(1).
-					Return(&providerv1beta1.Lock{LockId: "abc123"}, &typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)}, nil)
+				fc.On("Lock", mock.Anything, "abc123", "qwerty").Times(1).Return(
+					connector.NewResponseWithVersionAndLock(
+						200,
+						&typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)},
+						"abc123",
+					), nil)
 
 				httpAdapter.Lock(w, req)
 				resp := w.Result()
 				Expect(resp.StatusCode).To(Equal(200))
 				Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("abc123"))
-				Expect(resp.Header.Get("X-Wopi-Itemversion")).To(Equal("v1234567"))
+				Expect(resp.Header.Get(connector.HeaderWopiVersion)).To(Equal("v1234567"))
 			})
 		})
 	})
@@ -240,8 +245,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().RefreshLock(mock.Anything, "abc123").Times(1).
-				Return("", &typesv1beta1.Timestamp{}, errors.New("Something happened"))
+			fc.On("RefreshLock", mock.Anything, "abc123").Times(1).Return(nil, errors.New("Something happened"))
 
 			httpAdapter.RefreshLock(w, req)
 			resp := w.Result()
@@ -255,8 +259,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().RefreshLock(mock.Anything, "").Times(1).
-				Return("", &typesv1beta1.Timestamp{}, connector.NewConnectorError(400, "No lockId"))
+			fc.On("RefreshLock", mock.Anything, "").Times(1).Return(connector.NewResponse(400), nil)
 
 			httpAdapter.RefreshLock(w, req)
 			resp := w.Result()
@@ -270,13 +273,13 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().RefreshLock(mock.Anything, "abc123").Times(1).
-				Return("zzz111", &typesv1beta1.Timestamp{}, connector.NewConnectorError(409, "Lock conflict"))
+			fc.On("RefreshLock", mock.Anything, "abc123").Times(1).Return(connector.NewResponseLockConflict("zzz111", "Lock Conflict"), nil)
 
 			httpAdapter.RefreshLock(w, req)
 			resp := w.Result()
 			Expect(resp.StatusCode).To(Equal(409))
 			Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("zzz111"))
+			Expect(resp.Header.Get(connector.HeaderWopiLockFailureReason)).To(Equal("Lock Conflict"))
 		})
 
 		It("Success", func() {
@@ -286,13 +289,18 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().RefreshLock(mock.Anything, "abc123").Times(1).
-				Return("", &typesv1beta1.Timestamp{Seconds: uint64(12345), Nanos: uint32(678)}, nil)
+			fc.On("RefreshLock", mock.Anything, "abc123").Times(1).Return(
+				connector.NewResponseWithVersionAndLock(
+					200,
+					&typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(5678)},
+					"abc123",
+				), nil)
 
 			httpAdapter.RefreshLock(w, req)
 			resp := w.Result()
 			Expect(resp.StatusCode).To(Equal(200))
-			Expect(resp.Header.Get("X-Wopi-Itemversion")).To(Equal("v12345678"))
+			Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("abc123"))
+			Expect(resp.Header.Get(connector.HeaderWopiVersion)).To(Equal("v12345678"))
 		})
 	})
 
@@ -304,8 +312,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().UnLock(mock.Anything, "abc123").Times(1).
-				Return("", &typesv1beta1.Timestamp{}, errors.New("Something happened"))
+			fc.On("UnLock", mock.Anything, "abc123").Times(1).Return(nil, errors.New("Something happened"))
 
 			httpAdapter.UnLock(w, req)
 			resp := w.Result()
@@ -319,8 +326,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().UnLock(mock.Anything, "").Times(1).
-				Return("", &typesv1beta1.Timestamp{}, connector.NewConnectorError(400, "No lockId"))
+			fc.On("UnLock", mock.Anything, "").Times(1).Return(connector.NewResponse(400), nil)
 
 			httpAdapter.UnLock(w, req)
 			resp := w.Result()
@@ -334,14 +340,13 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().UnLock(mock.Anything, "abc123").Times(1).
-				Return("zzz111", &typesv1beta1.Timestamp{Seconds: uint64(12345), Nanos: uint32(678)}, connector.NewConnectorError(409, "Lock conflict"))
+			fc.On("UnLock", mock.Anything, "abc123").Times(1).Return(connector.NewResponseLockConflict("zzz111", "Lock Conflict"), nil)
 
 			httpAdapter.UnLock(w, req)
 			resp := w.Result()
 			Expect(resp.StatusCode).To(Equal(409))
 			Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("zzz111"))
-			Expect(resp.Header.Get("X-Wopi-Itemversion")).To(Equal("v12345678"))
+			Expect(resp.Header.Get(connector.HeaderWopiLockFailureReason)).To(Equal("Lock Conflict"))
 		})
 
 		It("Success", func() {
@@ -351,13 +356,15 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.EXPECT().UnLock(mock.Anything, "abc123").Times(1).
-				Return("", &typesv1beta1.Timestamp{Seconds: uint64(12345), Nanos: uint32(678)}, nil)
+			fc.On("UnLock", mock.Anything, "abc123").Times(1).Return(
+				connector.NewResponseWithVersion(200,
+					&typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)},
+				), nil)
 
 			httpAdapter.UnLock(w, req)
 			resp := w.Result()
 			Expect(resp.StatusCode).To(Equal(200))
-			Expect(resp.Header.Get("X-Wopi-Itemversion")).To(Equal("v12345678"))
+			Expect(resp.Header.Get(connector.HeaderWopiVersion)).To(Equal("v1234567"))
 		})
 	})
 
@@ -367,7 +374,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.On("CheckFileInfo", mock.Anything).Times(1).Return(&fileinfo.Microsoft{}, errors.New("Something happened"))
+			fc.On("CheckFileInfo", mock.Anything).Times(1).Return(nil, errors.New("Something happened"))
 
 			httpAdapter.CheckFileInfo(w, req)
 			resp := w.Result()
@@ -381,7 +388,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			fc.On("CheckFileInfo", mock.Anything).Times(1).Return(&fileinfo.Microsoft{}, connector.NewConnectorError(404, "Not found"))
+			fc.On("CheckFileInfo", mock.Anything).Times(1).Return(connector.NewResponse(404), nil)
 
 			httpAdapter.CheckFileInfo(w, req)
 			resp := w.Result()
@@ -398,7 +405,7 @@ var _ = Describe("HttpAdapter", func() {
 				Size:              123456789,
 				BreadcrumbDocName: "testy.docx",
 			}
-			fc.On("CheckFileInfo", mock.Anything).Times(1).Return(finfo, nil)
+			fc.On("CheckFileInfo", mock.Anything).Times(1).Return(connector.NewResponseSuccessBody(finfo), nil)
 
 			httpAdapter.CheckFileInfo(w, req)
 			resp := w.Result()
@@ -467,8 +474,7 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			cc.EXPECT().PutFile(mock.Anything, mock.Anything, int64(len(contentBody)), "abc123").Times(1).
-				Return("", &typesv1beta1.Timestamp{}, errors.New("Something happened"))
+			cc.On("PutFile", mock.Anything, mock.Anything, int64(len(contentBody)), "abc123").Times(1).Return(nil, errors.New("Something happened"))
 
 			httpAdapter.PutFile(w, req)
 			resp := w.Result()
@@ -482,14 +488,14 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			cc.EXPECT().PutFile(mock.Anything, mock.Anything, int64(len(contentBody)), "abc123").Times(1).
-				Return("zzz111", &typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)}, connector.NewConnectorError(409, "Lock conflict"))
+			cc.On("PutFile", mock.Anything, mock.Anything, int64(len(contentBody)), "abc123").Times(1).Return(
+				connector.NewResponseLockConflict("zzz111", "Lock Conflict"), nil)
 
 			httpAdapter.PutFile(w, req)
 			resp := w.Result()
 			Expect(resp.StatusCode).To(Equal(409))
 			Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("zzz111"))
-			Expect(resp.Header.Get("X-Wopi-Itemversion")).To(Equal("v1234567"))
+			Expect(resp.Header.Get(connector.HeaderWopiLockFailureReason)).To(Equal("Lock Conflict"))
 		})
 
 		It("Success", func() {
@@ -499,13 +505,18 @@ var _ = Describe("HttpAdapter", func() {
 
 			w := httptest.NewRecorder()
 
-			cc.EXPECT().PutFile(mock.Anything, mock.Anything, int64(len(contentBody)), "abc123").Times(1).
-				Return("", &typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)}, nil)
+			cc.On("PutFile", mock.Anything, mock.Anything, int64(len(contentBody)), "abc123").Times(1).Return(
+				connector.NewResponseWithVersionAndLock(
+					200,
+					&typesv1beta1.Timestamp{Seconds: uint64(1234), Nanos: uint32(567)},
+					"abc123",
+				), nil)
 
 			httpAdapter.PutFile(w, req)
 			resp := w.Result()
 			Expect(resp.StatusCode).To(Equal(200))
-			Expect(resp.Header.Get("X-Wopi-Itemversion")).To(Equal("v1234567"))
+			Expect(resp.Header.Get(connector.HeaderWopiLock)).To(Equal("abc123"))
+			Expect(resp.Header.Get(connector.HeaderWopiVersion)).To(Equal("v1234567"))
 		})
 	})
 })

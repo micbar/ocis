@@ -15,10 +15,12 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	revactx "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/owncloud/ocis/v2/ocis-pkg/tracing"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/config"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/helpers"
 	"github.com/owncloud/ocis/v2/services/collaboration/pkg/middleware"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // ContentConnectorService is the interface to implement the "File contents"
@@ -33,7 +35,7 @@ type ContentConnectorService interface {
 	// locked beforehand, so the lockID needs to be provided.
 	// The current lockID will be returned ONLY if a conflict happens (the file is
 	// locked with a different lockID)
-	PutFile(ctx context.Context, stream io.Reader, streamLength int64, lockID string) (string, *types.Timestamp, error)
+	PutFile(ctx context.Context, stream io.Reader, streamLength int64, lockID string) (*ConnectorResponse, error)
 }
 
 // ContentConnector implements the "File contents" endpoint.
@@ -156,6 +158,8 @@ func (c *ContentConnector) GetFile(ctx context.Context, w http.ResponseWriter) e
 	} else {
 		httpReq.Header.Add("X-Access-Token", wopiContext.AccessToken)
 	}
+	tracingProp := tracing.GetPropagator()
+	tracingProp.Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
 
 	httpResp, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -211,10 +215,10 @@ func (c *ContentConnector) GetFile(ctx context.Context, w http.ResponseWriter) e
 // (check for err != nil to know if something went wrong)
 //
 // On success, the method will return the new mtime of the file
-func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, streamLength int64, lockID string) (string, *types.Timestamp, error) {
+func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, streamLength int64, lockID string) (*ConnectorResponse, error) {
 	wopiContext, err := middleware.WopiContextFromCtx(ctx)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	logger := zerolog.Ctx(ctx).With().
@@ -231,7 +235,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("PutFile: stat failed")
-		return "", nil, err
+		return nil, err
 	}
 
 	if statRes.GetStatus().GetCode() != rpcv1beta1.Code_CODE_OK && statRes.GetStatus().GetCode() != rpcv1beta1.Code_CODE_NOT_FOUND {
@@ -239,7 +243,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 			Str("StatusCode", statRes.GetStatus().GetCode().String()).
 			Str("StatusMsg", statRes.GetStatus().GetMessage()).
 			Msg("PutFile: stat failed with unexpected status")
-		return "", nil, NewConnectorError(500, statRes.GetStatus().GetCode().String()+" "+statRes.GetStatus().GetMessage())
+		return NewResponse(500), nil
 	}
 
 	mtime := statRes.GetInfo().GetMtime()
@@ -249,7 +253,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 			Str("LockID", statRes.GetInfo().GetLock().GetLockId()).
 			Msg("PutFile: wrong lock")
 		// onlyoffice says it's required to send the current lockId, MS doesn't say anything
-		return statRes.GetInfo().GetLock().GetLockId(), nil, NewConnectorError(409, "Wrong lock")
+		return NewResponseLockConflict(statRes.GetInfo().GetLock().GetLockId(), "Lock Mismatch"), nil
 	}
 
 	// only unlocked uploads can go through if the target file is empty,
@@ -259,7 +263,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 	if lockID == "" && statRes.GetInfo().GetLock() == nil && statRes.GetInfo().GetSize() > 0 {
 		logger.Error().Msg("PutFile: file must be locked first")
 		// onlyoffice says to send an empty string if the file is unlocked, MS doesn't say anything
-		return "", nil, NewConnectorError(409, "File must be locked first")
+		return NewResponseLockConflict("", "Cannot PutFile on unlocked file"), nil
 	}
 
 	// Prepare the data to initiate the upload
@@ -287,7 +291,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 	resp, err := c.gwc.InitiateFileUpload(ctx, req)
 	if err != nil {
 		logger.Error().Err(err).Msg("UploadHelper: InitiateFileUpload failed")
-		return "", nil, err
+		return nil, err
 	}
 
 	if resp.GetStatus().GetCode() != rpcv1beta1.Code_CODE_OK {
@@ -295,7 +299,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 			Str("StatusCode", resp.GetStatus().GetCode().String()).
 			Str("StatusMsg", resp.GetStatus().GetMessage()).
 			Msg("UploadHelper: InitiateFileUpload failed with wrong status")
-		return "", nil, NewConnectorError(500, resp.GetStatus().GetCode().String()+" "+resp.GetStatus().GetMessage())
+		return NewResponse(500), nil
 	}
 
 	// if the content length is greater than 0, we need to upload the content to the
@@ -320,7 +324,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 				Str("Endpoint", uploadEndpoint).
 				Bool("HasUploadToken", hasUploadToken).
 				Msg("UploadHelper: Upload endpoint or token is missing")
-			return "", nil, NewConnectorError(500, "upload endpoint or token is missing")
+			return NewResponse(500), nil
 		}
 
 		httpClient := http.Client{
@@ -340,7 +344,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 				Str("Endpoint", uploadEndpoint).
 				Bool("HasUploadToken", hasUploadToken).
 				Msg("UploadHelper: Could not create the request to the endpoint")
-			return "", nil, err
+			return nil, err
 		}
 		// "stream" is an *http.body and doesn't fill the httpReq.ContentLength automatically
 		// we need to fill the ContentLength ourselves, and must match the stream length in order
@@ -358,6 +362,8 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 		//if lockID, ok := ctxpkg.ContextGetLockID(ctx); ok {
 		//	httpReq.Header.Add("X-Lock-Id", lockID)
 		//}
+		tracingProp := tracing.GetPropagator()
+		tracingProp.Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
 
 		httpResp, err := httpClient.Do(httpReq)
 		if err != nil {
@@ -366,7 +372,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 				Str("Endpoint", uploadEndpoint).
 				Bool("HasUploadToken", hasUploadToken).
 				Msg("UploadHelper: Put request to the upload endpoint failed")
-			return "", nil, err
+			return nil, err
 		}
 		defer httpResp.Body.Close()
 
@@ -376,7 +382,7 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 				Bool("HasUploadToken", hasUploadToken).
 				Int("HttpCode", httpResp.StatusCode).
 				Msg("UploadHelper: Put request to the upload endpoint failed with unexpected status")
-			return "", nil, NewConnectorError(500, "PutFile: Uploading the file failed")
+			return NewResponse(500), nil
 		}
 		// We need a stat call on the target file after the upload to get the
 		// new mtime
@@ -385,18 +391,18 @@ func (c *ContentConnector) PutFile(ctx context.Context, stream io.Reader, stream
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("PutFile: stat after upload failed")
-			return "", nil, err
+			return nil, err
 		}
 		if statResAfter.GetStatus().GetCode() != rpcv1beta1.Code_CODE_OK {
 			logger.Error().
 				Str("StatusCode", statRes.GetStatus().GetCode().String()).
 				Str("StatusMsg", statRes.GetStatus().GetMessage()).
 				Msg("PutFile: stat after upload failed with unexpected status")
-			return "", nil, NewConnectorError(500, statResAfter.GetStatus().GetCode().String()+" "+statResAfter.GetStatus().GetMessage())
+			return NewResponse(500), nil
 		}
 		mtime = statResAfter.GetInfo().GetMtime()
 	}
 
 	logger.Debug().Msg("PutFile: success")
-	return "", mtime, nil
+	return NewResponseWithVersion(200, mtime), nil
 }
