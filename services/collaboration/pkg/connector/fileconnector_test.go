@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	appproviderv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -14,6 +15,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -948,7 +950,11 @@ var _ = Describe("FileConnector", func() {
 				},
 			}, nil)
 
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", nil)
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return(
+				"",
+				utils.TimeToTS(time.Date(2024, time.January, 01, 12, 00, 00, 0, time.Local)),
+				nil,
+			)
 
 			stat2ParamMatcher := mock.MatchedBy(func(statReq *providerv1beta1.StatRequest) bool {
 				if statReq.Ref.ResourceId.StorageId == "storageid" &&
@@ -1001,7 +1007,11 @@ var _ = Describe("FileConnector", func() {
 				},
 			}, nil)
 
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", nil)
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return(
+				"",
+				utils.TimeToTS(time.Date(2024, time.January, 01, 12, 00, 00, 0, time.Local)),
+				nil,
+			)
 
 			stat2ParamMatcher := mock.MatchedBy(func(statReq *providerv1beta1.StatRequest) bool {
 				if statReq.Ref.ResourceId.StorageId == "storageid" &&
@@ -1058,8 +1068,12 @@ var _ = Describe("FileConnector", func() {
 			}, nil)
 
 			// first call will fail with conflict, second call succeeds
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", connector.NewConnectorError(409, "file conflict")).Once()
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", nil).Once()
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return(
+				"",
+				utils.TimeToTS(time.Date(2024, time.January, 01, 10, 00, 00, 0, time.Local)),
+				connector.NewConnectorError(409, "file conflict")).
+				Once()
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", &typesv1beta1.Timestamp{}, nil).Once()
 
 			newFilePath := new(string)
 			stat2ParamMatcher := mock.MatchedBy(func(statReq *providerv1beta1.StatRequest) bool {
@@ -1118,7 +1132,7 @@ var _ = Describe("FileConnector", func() {
 				},
 			}, nil)
 
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", connector.NewConnectorError(500, "something bad happened"))
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", &typesv1beta1.Timestamp{}, connector.NewConnectorError(500, "something bad happened"))
 
 			response, err := fc.PutRelativeFileSuggested(ctx, ccs, stream, int64(stream.Len()), ".pdf")
 			Expect(err).To(HaveOccurred())
@@ -1191,7 +1205,11 @@ var _ = Describe("FileConnector", func() {
 				},
 			}, nil)
 
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", nil)
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return(
+				"",
+				utils.TimeToTS(time.Date(2024, time.January, 01, 14, 00, 00, 0, time.Local)),
+				nil,
+			)
 
 			stat2ParamMatcher := mock.MatchedBy(func(statReq *providerv1beta1.StatRequest) bool {
 				if statReq.Ref.ResourceId.StorageId == "storageid" &&
@@ -1244,7 +1262,11 @@ var _ = Describe("FileConnector", func() {
 				},
 			}, nil)
 
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("zzz999", connector.NewConnectorError(409, "file conflict"))
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return(
+				"zzz999",
+				utils.TimeToTS(time.Date(2024, time.January, 01, 12, 00, 00, 0, time.Local)),
+				connector.NewConnectorError(409, "file conflict"),
+			)
 
 			stat2ParamMatcher := mock.MatchedBy(func(statReq *providerv1beta1.StatRequest) bool {
 				if statReq.Ref.ResourceId.StorageId == "storageid" &&
@@ -1302,7 +1324,7 @@ var _ = Describe("FileConnector", func() {
 				},
 			}, nil)
 
-			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", connector.NewConnectorError(500, "something bad happened"))
+			ccs.On("PutFile", mock.Anything, stream, int64(stream.Len()), "").Times(1).Return("", &typesv1beta1.Timestamp{}, connector.NewConnectorError(500, "something bad happened"))
 
 			response, headers, err := fc.PutRelativeFileRelative(ctx, ccs, stream, int64(stream.Len()), "convFile.pdf")
 			Expect(err).To(HaveOccurred())

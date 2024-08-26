@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"time"
 
+	"github.com/cs3org/reva/v2/pkg/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -75,6 +77,19 @@ var _ = Describe("ContentConnector", func() {
 	})
 
 	Describe("GetFile", func() {
+		BeforeEach(func() {
+			gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).Return(&providerv1beta1.StatResponse{
+				Status: status.NewOK(context.Background()),
+				Info: &providerv1beta1.ResourceInfo{
+					Id: &providerv1beta1.ResourceId{
+						StorageId: "abc",
+						OpaqueId:  "12345",
+						SpaceId:   "zzz",
+					},
+					Path: ".",
+				},
+			}, nil)
+		})
 		It("No valid context", func() {
 			sb := httptest.NewRecorder()
 			ctx := context.Background()
@@ -216,7 +231,7 @@ var _ = Describe("ContentConnector", func() {
 			newLockId, mtime, err := cc.PutFile(ctx, reader, reader.Size(), "notARandomLockId")
 			Expect(err).To(HaveOccurred())
 			Expect(newLockId).To(Equal(""))
-			Expect(mtime).To(Equal(""))
+			Expect(mtime).To(BeNil())
 		})
 
 		It("Stat call failed", func() {
@@ -361,7 +376,7 @@ var _ = Describe("ContentConnector", func() {
 			newLockId, mtime, err := cc.PutFile(ctx, reader, reader.Size(), "goodAndValidLock")
 			Expect(err).To(Succeed())
 			Expect(newLockId).To(Equal(""))
-			Expect(mtime).To(Equal(""))
+			Expect(mtime).To(BeNil())
 		})
 
 		It("Missing upload endpoint", func() {
@@ -438,6 +453,23 @@ var _ = Describe("ContentConnector", func() {
 				},
 			}, nil)
 
+			gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).Times(1).Return(&providerv1beta1.StatResponse{
+				Status: status.NewOK(ctx),
+				Info: &providerv1beta1.ResourceInfo{
+					Lock: &providerv1beta1.Lock{
+						LockId: "goodAndValidLock",
+						Type:   providerv1beta1.LockType_LOCK_TYPE_WRITE,
+					},
+					Size: uint64(123456789),
+					Id: &providerv1beta1.ResourceId{
+						StorageId: "storageID",
+						OpaqueId:  "opaqueID",
+						SpaceId:   "spaceID",
+					},
+					Mtime: utils.TimeToTS(time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)),
+				},
+			}, nil)
+
 			gatewayClient.On("InitiateFileUpload", mock.Anything, mock.Anything).Times(1).Return(&gateway.InitiateFileUploadResponse{
 				Status: status.NewOK(ctx),
 				Protocols: []*gateway.FileUploadProtocol{
@@ -452,7 +484,8 @@ var _ = Describe("ContentConnector", func() {
 			Expect(srvReqHeader.Get("X-Access-Token")).To(Equal(wopiCtx.AccessToken))
 			Expect(err).To(Succeed())
 			Expect(newLockId).To(Equal(""))
-			Expect(mtime).To(Equal(""))
+			Expect(mtime.Seconds).To(Equal(uint64(1609459200)))
+			Expect(mtime.Nanos).To(Equal(uint32(0)))
 		})
 	})
 })
